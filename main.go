@@ -7,48 +7,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
 func compressFolder(path string, destDir string) {
 	fmt.Println("compress folder:", path)
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("tar -cf - %s | lz4 > %s/%s.tar.lz4", path, destDir, strings.ReplaceAll(path, "/", "")))
+	dirName := filepath.Base(path)
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("tar -cf - %s | lz4 > %s/%s.tar.lz4", path, destDir, dirName))
 	err := cmd.Run()
 	if err != nil {
 		fmt.Println("Error compressing folder:", err)
 	}
-}
-
-func walkDir(path string, depth, currentDepth int, folderChan chan<- string) error {
-	if currentDepth > depth {
-		return nil
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	files, err := f.Readdir(-1)
-	if err != nil {
-		return err
-	}
-
-	for _, file := range files {
-		if file.IsDir() {
-			newPath := filepath.Join(path, file.Name())
-			if strings.Count(newPath, "/") == depth {
-				folderChan <- newPath
-			}
-			if err := walkDir(newPath, depth, currentDepth+1, folderChan); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 type DirDepth struct {
@@ -66,28 +35,7 @@ func main() {
 	var wg sync.WaitGroup
 	folderChan := make(chan string, *thread)
 
-	origin := strings.Count(*path, "/")
 	doneC := make(chan struct{})
-	// go func() {
-	// 	defer close(doneC)
-	// 	if err := walkDir(*path, *depth+origin, 0, folderChan); err != nil {
-	// 		log.Fatal(err)
-	// 	}
-
-	// filepath.WalkDir(*path, func(path string, d fs.DirEntry, err error) error {
-	// 	fmt.Println("walk in path:", path)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if d.IsDir() && strings.Count(path, "/") == *depth+origin {
-	// 		fmt.Println("push path:", path)
-	// 		folderChan <- path
-	// 	}
-	// 	return nil
-	// })
-	// }()
-
-	// doneC := make(chan struct{})
 	go func() {
 		defer close(doneC)
 
@@ -96,7 +44,7 @@ func main() {
 			dir := queue[0]
 			queue = queue[1:]
 
-			if dir.Depth == *depth+origin {
+			if dir.Depth == *depth {
 				folderChan <- dir.Path
 				continue
 			}
