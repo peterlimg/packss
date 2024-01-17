@@ -37,7 +37,7 @@ func main() {
 				return err
 			}
 			if info.IsDir() && strings.Count(path, "/") == *depth {
-				// fmt.Println("push path:", path)
+				fmt.Println("push path:", path)
 				folderChan <- path
 			}
 			return nil
