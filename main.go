@@ -9,13 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 func compressFolder(path string, depth int, destDir string) {
 	spath := strings.Split(path, "/")
-	dirName := strings.Join(spath[len(spath)-depth:], "")
+	dirName := strings.Join(spath[len(spath)-depth-1:], "")
 
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("tar -cf - %s | lz4 > %s/%s.tar.lz4", path, destDir, dirName))
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("tar -cf - %s | pigz > %s/%s.tar.gz", path, destDir, dirName))
 	err := cmd.Run()
 	if err != nil {
 		fmt.Println("Error compressing folder:", err)
@@ -33,6 +34,8 @@ func main() {
 	path := flag.String("path", "", "Path to data")
 	dest := flag.String("dest", "", "dest dir to save data")
 	flag.Parse()
+
+	var doneCount int32
 
 	var wg sync.WaitGroup
 	folderChan := make(chan string, *thread)
@@ -78,7 +81,8 @@ func main() {
 			for folder := range folderChan {
 				fmt.Println(">>> compress folder:", i, folder)
 				compressFolder(folder, *depth, *dest)
-				fmt.Println("<<< thread", i, "is done")
+				dc := atomic.AddInt32(&doneCount, 1)
+				fmt.Println("<<< thread", i, "is done", "total done:", dc)
 			}
 		}(i)
 	}
