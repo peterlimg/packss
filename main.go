@@ -7,12 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
-func compressFolder(path string, destDir string) {
-	fmt.Println("compress folder:", path)
-	dirName := filepath.Base(path)
+func compressFolder(path string, depth int, destDir string) {
+	spath := strings.Split(path, "/")
+	dirName := strings.Join(spath[len(spath)-depth:], "")
+
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("tar -cf - %s | lz4 > %s/%s.tar.lz4", path, destDir, dirName))
 	err := cmd.Run()
 	if err != nil {
@@ -71,13 +73,14 @@ func main() {
 
 	for i := 0; i < *thread; i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
 			for folder := range folderChan {
-				fmt.Println("compress folder:", folder)
-				compressFolder(folder, *dest)
+				fmt.Println(">>> compress folder:", i, folder)
+				compressFolder(folder, *depth, *dest)
+				fmt.Println("<<< thread", i, "is done")
 			}
-		}()
+		}(i)
 	}
 
 	<-doneC
