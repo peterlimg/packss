@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,42 @@ func compressFolder(path string, destDir string) {
 	}
 }
 
+func walkDir(path string, depth, currentDepth int, folderChan chan<- string) error {
+	if currentDepth > depth {
+		return nil
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	files, err := f.Readdir(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			newPath := filepath.Join(path, file.Name())
+			if strings.Count(newPath, "/") == depth {
+				folderChan <- newPath
+			}
+			if err := walkDir(newPath, depth, currentDepth+1, folderChan); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+type DirDepth struct {
+	Path  string
+	Depth int
+}
+
 func main() {
 	depth := flag.Int("depth", 3, "Depth to start packing from")
 	thread := flag.Int("thread", 4, "Number of threads")
@@ -31,19 +68,57 @@ func main() {
 
 	origin := strings.Count(*path, "/")
 	doneC := make(chan struct{})
+	// go func() {
+	// 	defer close(doneC)
+	// 	if err := walkDir(*path, *depth+origin, 0, folderChan); err != nil {
+	// 		log.Fatal(err)
+	// 	}
+
+	// filepath.WalkDir(*path, func(path string, d fs.DirEntry, err error) error {
+	// 	fmt.Println("walk in path:", path)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if d.IsDir() && strings.Count(path, "/") == *depth+origin {
+	// 		fmt.Println("push path:", path)
+	// 		folderChan <- path
+	// 	}
+	// 	return nil
+	// })
+	// }()
+
+	// doneC := make(chan struct{})
 	go func() {
 		defer close(doneC)
-		filepath.Walk(*path, func(path string, info os.FileInfo, err error) error {
-			fmt.Println("walk in path:", path)
+
+		queue := []DirDepth{{Path: *path, Depth: 0}}
+		for len(queue) > 0 {
+			dir := queue[0]
+			queue = queue[1:]
+
+			if dir.Depth == *depth+origin {
+				folderChan <- dir.Path
+				continue
+			}
+
+			f, err := os.Open(dir.Path)
 			if err != nil {
-				return err
+				log.Fatal(err)
 			}
-			if info.IsDir() && strings.Count(path, "/") == *depth+origin {
-				fmt.Println("push path:", path)
-				folderChan <- path
+
+			files, err := f.Readdir(-1)
+			f.Close()
+			if err != nil {
+				log.Fatal(err)
 			}
-			return nil
-		})
+
+			for _, file := range files {
+				if file.IsDir() {
+					newPath := filepath.Join(dir.Path, file.Name())
+					queue = append(queue, DirDepth{Path: newPath, Depth: dir.Depth + 1})
+				}
+			}
+		}
 	}()
 
 	for i := 0; i < *thread; i++ {
