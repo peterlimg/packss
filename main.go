@@ -16,7 +16,7 @@ func compressFolder(path string, depth int, destDir string) {
 	spath := strings.Split(path, "/")
 	dirName := strings.Join(spath[len(spath)-depth-1:], "")
 
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("tar -cf - %s | pigz > %s/%s.tar.gz", path, destDir, dirName))
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("tar -cf - %s | pigz -p 10 > %s/%s.tar.gz", path, destDir, dirName))
 	err := cmd.Run()
 	if err != nil {
 		fmt.Println("Error compressing folder:", err)
@@ -29,8 +29,8 @@ type DirDepth struct {
 }
 
 func main() {
-	depth := flag.Int("depth", 3, "Depth to start packing from")
-	thread := flag.Int("thread", 4, "Number of threads")
+	depth := flag.Int("depth", 2, "Depth to start packing from")
+	thread := flag.Int("thread", 10, "Number of threads")
 	path := flag.String("path", "", "Path to data")
 	dest := flag.String("dest", "", "dest dir to save data")
 	flag.Parse()
