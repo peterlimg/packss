@@ -29,14 +29,16 @@ func main() {
 	var wg sync.WaitGroup
 	folderChan := make(chan string, *thread)
 
+	origin := strings.Count(*path, "/")
 	doneC := make(chan struct{})
 	go func() {
 		defer close(doneC)
 		filepath.Walk(*path, func(path string, info os.FileInfo, err error) error {
+			fmt.Println("walk in path:", path)
 			if err != nil {
 				return err
 			}
-			if info.IsDir() && strings.Count(path, "/") == *depth {
+			if info.IsDir() && strings.Count(path, "/") == *depth+origin {
 				fmt.Println("push path:", path)
 				folderChan <- path
 			}
