@@ -74,6 +74,10 @@ func main() {
 		}
 	}()
 
+	if _, err := os.Stat(*dest); os.IsNotExist(err) {
+		os.MkdirAll(*dest, os.ModePerm)
+	}
+
 	for i := 0; i < *thread; i++ {
 		wg.Add(1)
 		go func(i int) {
